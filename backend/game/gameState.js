@@ -190,11 +190,34 @@ class GameState {
     // Проверяем, не завершилась ли игра после действия
     this._checkForEarlyWinner();
     
-    if (!this.finished && this._bettingRoundFinished()) {
-      this._nextStage();
-    } else if (!this.finished) {
-      this._moveToNextPlayer();
+    if (!this.finished) {
+      // Если все активные игроки all-in, сразу идем в шоудаун
+      if (this._allPlayersAllIn()) {
+        console.log('Все активные игроки all-in, переход к шоудауну');
+        this._goToShowdown();
+      } else if (this._bettingRoundFinished()) {
+        this._nextStage();
+      } else {
+        this._moveToNextPlayer();
+      }
     }
+  }
+
+  _allPlayersAllIn() {
+    const activePlayers = this.players.filter(p => !p.folded);
+    return activePlayers.length > 0 && activePlayers.every(p => p.allIn);
+  }
+
+  _goToShowdown() {
+    console.log('Немедленный переход к шоудауну');
+    
+    // Добиваем карты до ривера если нужно
+    while (this.communityCards.length < 5) {
+      this.communityCards.push(this.deck.pop());
+    }
+    
+    this.stage = 'showdown';
+    this.finishShowdown();
   }
 
   _handleCall(player) {
@@ -297,6 +320,8 @@ class GameState {
       this.minRaise = Math.max(this.lastRaise, BIG_BLIND);
       this._resetActedFlags();
     }
+    
+    console.log(`${player.name} идет ALL-IN на ${allInAmount}, общая ставка: ${totalBet}`);
   }
 
   _resetActedFlags() {
@@ -329,6 +354,13 @@ class GameState {
 
     const nextStage = this._getNextStage();
     this.stage = nextStage;
+
+    // Если все активные игроки all-in, сразу переходим к шоудауну
+    if (this._allPlayersAllIn()) {
+      console.log('Все активные игроки all-in, пропускаем улицы до шоудауна');
+      this._goToShowdown();
+      return;
+    }
 
     switch (nextStage) {
       case 'flop':
@@ -537,30 +569,27 @@ class GameState {
   _bettingRoundFinished() {
     const activePlayers = this.players.filter(p => !p.folded);
     
-    console.log(`Проверка завершения раунда торговли (${this.stage}):`);
-    console.log(`Активных игроков: ${activePlayers.length}`);
-    console.log(`Текущая ставка: ${this.currentBet}`);
+    // Если все активные игроки all-in, раунд завершен
+    if (activePlayers.every(p => p.allIn)) {
+      console.log('Все активные игроки all-in, раунд завершен');
+      return true;
+    }
     
-    // Проверяем каждого активного игрока
+    // Иначе проверяем стандартные условия
     const allDone = activePlayers.every(p => {
-      const isDone = p.allIn || (p.acted && p.bet === this.currentBet);
-      console.log(`${p.name}: allIn=${p.allIn}, acted=${p.acted}, bet=${p.bet}, currentBet=${this.currentBet}, done=${isDone}`);
-      return isDone;
+      return p.allIn || (p.acted && p.bet === this.currentBet);
     });
     
-    console.log(`Раунд завершен: ${allDone}`);
+    console.log(`Раунд торговли завершен: ${allDone}`);
     return allDone;
   }
 
   _moveToNextPlayer() {
-    console.log(`Поиск следующего игрока (текущий: ${this.currentPlayerIndex})`);
-    
     const startIndex = this.currentPlayerIndex;
     let nextIndex = this._nextActivePlayer(startIndex);
     
     while (nextIndex !== startIndex) {
       const player = this.players[nextIndex];
-      console.log(`Проверка игрока ${nextIndex} (${player.name}): folded=${player.folded}, allIn=${player.allIn}, acted=${player.acted}`);
       
       if (!player.folded && !player.allIn && !player.acted) {
         this.currentPlayerIndex = nextIndex;
@@ -570,9 +599,7 @@ class GameState {
       nextIndex = this._nextActivePlayer(nextIndex);
     }
     
-    console.log('Не найден следующий игрок, проверяем завершение раунда');
-    
-    // Если все игроки уже сделали действие, но раунд не закончился
+    // Если не нашли следующего игрока, проверяем завершение раунда
     if (this._bettingRoundFinished()) {
       this._nextStage();
     } else {
