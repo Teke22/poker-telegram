@@ -210,21 +210,6 @@ button:disabled {
   font-weight:bold;
   color:#3498db;
 }
-.telegram-user {
-  color: #2ecc71;
-  font-weight: bold;
-  position: relative;
-  padding-left: 25px;
-}
-.telegram-user::before {
-  content: "✈";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 16px;
-  color: #3498db;
-}
 .you-name {
   color:#2ecc71;
   font-weight:bold;
@@ -309,77 +294,26 @@ button:disabled {
 <div id="app"></div>
 
 <script>
-// Инициализируем Telegram Web App
-let tg = null;
-let me = null;
+const tg = window.Telegram?.WebApp;
 
-// Ждем загрузки Telegram Web App
-function initTelegram() {
-  if (window.Telegram?.WebApp) {
-    tg = window.Telegram.WebApp;
-    
-    // Расширяем приложение на весь экран
-    tg.expand();
-    
-    // Получаем данные пользователя
-    let userData = null;
-    
-    // Пробуем получить из initDataUnsafe
-    if (tg.initDataUnsafe?.user) {
-      userData = tg.initDataUnsafe.user;
-    } else {
-      // Пробуем получить из initData
-      try {
-        const initData = new URLSearchParams(tg.initData);
-        const userJson = initData.get('user');
-        if (userJson) {
-          userData = JSON.parse(userJson);
-        }
-      } catch (e) {
-        console.log('Cannot parse initData:', e);
-      }
-    }
-    
-    if (userData) {
-      // Формируем красивое имя пользователя
-      let userName = '';
-      
-      if (userData.first_name) {
-        userName = userData.first_name;
-        if (userData.last_name) {
-          userName += ' ' + userData.last_name;
-        }
-      } else if (userData.username) {
-        userName = '@' + userData.username;
-      } else {
-        userName = `Игрок_${String(userData.id).slice(-4)}`;
-      }
-      
-      me = {
-        id: String(userData.id),
-        name: userName,
-        originalUser: userData, // Сохраняем оригинальные данные
-        chips: 1000
-      };
-      
-      console.log('Telegram user loaded:', me);
-    }
-  }
-  
-  // Если Telegram не доступен или данные не получены, используем дебаг
-  if (!me) {
-    const randomId = Math.random().toString(36).substr(2, 6).toUpperCase();
-    me = {
-      id: 'debug_' + randomId,
-      name: `Игрок_${randomId}`,
-      chips: 1000
-    };
-    console.log('Debug user created:', me);
-  }
+// Инициализируем пользователя
+let me;
+if (tg && tg.initDataUnsafe?.user) {
+  const user = tg.initDataUnsafe.user;
+  me = {
+    id: String(user.id),
+    name: user.first_name || 
+          (user.username ? '@' + user.username : `Игрок_${String(user.id).slice(-4)}`),
+    chips: 1000
+  };
+} else {
+  const randomId = Math.random().toString(36).substr(2, 6).toUpperCase();
+  me = {
+    id: 'debug_' + randomId,
+    name: `Игрок_${randomId}`,
+    chips: 1000
+  };
 }
-
-// Вызываем инициализацию
-initTelegram();
 
 const socket = io({ transports: ['websocket'] });
 
@@ -392,47 +326,16 @@ let winnersShown = false;
 // ============= UTILITY FUNCTIONS =============
 
 function getPlayerDisplayName(player, isMe = false) {
-  // Если это наш игрок и у нас есть Telegram данные
-  if (isMe && me?.originalUser) {
-    const user = me.originalUser;
-    // Пробуем получить имя в порядке приоритета
-    if (user.first_name) {
-      return `${user.first_name}${user.last_name ? ' ' + user.last_name : ''} 👤`;
-    }
-    if (user.username) {
-      return `@${user.username} 👤`;
-    }
-  }
+  if (isMe) return `${player.name} 👤`;
   
-  // Если игрок имеет оригинальные данные Telegram (пришедшие с сервера)
-  if (player.originalUser) {
-    const user = player.originalUser;
-    if (user.first_name) {
-      return `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}`;
-    }
-    if (user.username) {
-      return `@${user.username}`;
-    }
-  }
+  if (player.name.startsWith('@')) return player.name;
   
-  // Для других игроков или если нет Telegram данных
-  // Проверяем, есть ли в имени "@" (это username)
-  if (player.name.startsWith('@')) {
-    return player.name;
-  }
-  
-  // Если имя содержит "Игрок_", показываем укороченную версию
   if (player.name.includes('Игрок_')) {
     const idPart = player.name.split('_')[1] || '';
     return `Игрок_${idPart.substring(0, 4)}`;
   }
   
-  // Для обычных имен обрезаем если слишком длинные
-  if (player.name.length > 10) {
-    return player.name.substring(0, 10) + '...';
-  }
-  
-  return player.name || `Игрок_${player.id.slice(-4)}`;
+  return player.name.length > 10 ? player.name.substring(0, 10) + '...' : player.name;
 }
 
 function renderCard(card, isWinning = false) {
@@ -475,33 +378,6 @@ function updateStatus(text) {
 // ============= UI FUNCTIONS =============
 
 function showLobby() {
-  let userName = me.name;
-  let userInfo = '';
-  
-  // Форматируем информацию о пользователе для лобби
-  if (me.originalUser) {
-    const user = me.originalUser;
-    if (user.first_name) {
-      userName = user.first_name;
-      if (user.last_name) {
-        userName += ' ' + user.last_name;
-      }
-    } else if (user.username) {
-      userName = '@' + user.username;
-    }
-    
-    userInfo = `
-      <p><strong>Имя:</strong> <span style="color:#2ecc71;">${userName}</span></p>
-      ${user.username ? `<p><strong>Username:</strong> @${user.username}</p>` : ''}
-      <p><strong>ID:</strong> <span style="color:#bdc3c7;">${me.id.slice(0, 12)}...</span></p>
-    `;
-  } else {
-    userInfo = `
-      <p><strong>Имя:</strong> <span style="color:#bdc3c7;">${userName}</span></p>
-      <p><strong>ID:</strong> <span style="color:#bdc3c7;">${me.id}</span></p>
-    `;
-  }
-  
   document.getElementById('app').innerHTML = `
     <div style="text-align:center; padding:20px;">
       <h1 style="color:#2ecc71; margin-bottom:30px;">🎴 POKER ROYALE</h1>
@@ -509,7 +385,8 @@ function showLobby() {
       <div style="background:rgba(0,0,0,0.3); padding:20px; border-radius:15px; margin:0 auto 30px; max-width:400px;">
         <div style="margin-bottom:20px;">
           <h3>👤 Ваш профиль</h3>
-          ${userInfo}
+          <p><strong>Имя:</strong> ${me.name}</p>
+          <p><strong>ID:</strong> ${me.id.slice(0, 12)}...</p>
           <p><strong>Фишки:</strong> <span style="color:#f1c40f;">${me.chips}</span></p>
         </div>
         
@@ -558,24 +435,21 @@ function showRoom() {
       
       <div style="background:rgba(0,0,0,0.3); padding:20px; border-radius:10px; margin:20px 0;">
         <h3 style="margin-top:0;">👥 Игроки в комнате (${room.players.length})</h3>
-        ${room.players.map(p => {
-          const isMe = p.id === me.id;
-          return `
-            <div class="player-row" style="${isMe ? 'background:rgba(46, 204, 113, 0.2);' : ''}">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                  <span class="${isMe ? 'telegram-user' : 'player-name'}">
-                    ${getPlayerDisplayName(p, isMe)}
-                  </span>
-                  ${isMe ? '<span class="badge badge-you">ВЫ</span>' : ''}
-                </div>
-                <div>
-                  <span class="chips-amount">💰 ${p.chips}</span>
-                </div>
+        ${room.players.map(p => `
+          <div class="player-row" style="${p.id === me.id ? 'background:rgba(46, 204, 113, 0.2);' : ''}">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <span class="${p.id === me.id ? 'you-name' : 'player-name'}">
+                  ${getPlayerDisplayName(p, p.id === me.id)}
+                </span>
+                ${p.id === me.id ? '<span class="badge badge-you">ВЫ</span>' : ''}
+              </div>
+              <div>
+                <span class="chips-amount">💰 ${p.chips}</span>
               </div>
             </div>
-          `;
-        }).join('')}
+          </div>
+        `).join('')}
       </div>
       
       <div style="text-align:center; margin-top:30px;">
@@ -688,7 +562,7 @@ function showGame() {
             <div class="player-row ${isCurrent ? 'current-turn' : ''} ${p.folded ? 'folded' : ''} ${isWinner ? 'winner-row' : ''}">
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                  <span class="${isMe ? 'telegram-user' : 'player-name'}">
+                  <span class="${isMe ? 'you-name' : 'player-name'}">
                     ${getPlayerDisplayName(p, isMe)}
                   </span>
                   ${isDealer ? '<span class="badge badge-dealer">D</span>' : ''}
@@ -935,14 +809,7 @@ function renderWinners() {
 // ============= GAME ACTIONS =============
 
 function createRoom() {
-  // Отправляем оригинальные данные пользователя на сервер
-  const userToSend = {
-    ...me,
-    // Сохраняем оригинальные Telegram данные если они есть
-    originalUser: me.originalUser
-  };
-  
-  socket.emit('create_room', { user: userToSend });
+  socket.emit('create_room', { user: me });
   updateStatus('Создание комнаты...');
 }
 
@@ -952,15 +819,7 @@ function joinRoom() {
     alert('Введите код комнаты');
     return;
   }
-  
-  // Отправляем оригинальные данные пользователя на сервер
-  const userToSend = {
-    ...me,
-    // Сохраняем оригинальные Telegram данные если они есть
-    originalUser: me.originalUser
-  };
-  
-  socket.emit('join_room', { code, user: userToSend });
+  socket.emit('join_room', { code, user: me });
   updateStatus('Присоединение к комнате...');
 }
 
@@ -1111,11 +970,6 @@ socket.on('disconnect', () => {
 socket.on('room_joined', (r) => {
   console.log('Room joined:', r);
   room = r;
-  // Если сервер отправляет игроков с оригинальными данными, обновляем наши данные
-  const meInRoom = r.players.find(p => p.id === me.id);
-  if (meInRoom && meInRoom.originalUser && !me.originalUser) {
-    me.originalUser = meInRoom.originalUser;
-  }
   showRoom();
 });
 
