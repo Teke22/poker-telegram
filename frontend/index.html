@@ -51,6 +51,17 @@ button:disabled {
   font-weight:bold;
   box-shadow:0 3px 6px rgba(0,0,0,0.3);
   overflow:hidden;
+  transition:all 0.3s;
+}
+.card.winning-card {
+  transform:scale(1.15);
+  box-shadow:0 0 20px #f1c40f;
+  z-index:10;
+  animation:winningCardGlow 2s infinite alternate;
+}
+@keyframes winningCardGlow {
+  0% { box-shadow:0 0 10px #f1c40f; }
+  100% { box-shadow:0 0 25px #f1c40f; }
 }
 .card-red {
   background:linear-gradient(145deg, #ffffff, #f0f0f0);
@@ -97,6 +108,16 @@ button:disabled {
   background:rgba(255,255,255,0.08);
   border-radius:8px;
   transition:all 0.3s;
+}
+.winner-row {
+  background:rgba(46, 204, 113, 0.3) !important;
+  border:2px solid #2ecc71;
+  animation:winnerPulse 2s infinite;
+}
+@keyframes winnerPulse {
+  0% { box-shadow:0 0 10px rgba(46, 204, 113, 0.5); }
+  50% { box-shadow:0 0 20px rgba(46, 204, 113, 0.8); }
+  100% { box-shadow:0 0 10px rgba(46, 204, 113, 0.5); }
 }
 .current-turn {
   background:rgba(46, 204, 113, 0.25);
@@ -177,6 +198,14 @@ button:disabled {
 .badge-you { background:#2ecc71; }
 .badge-allin { background:#f39c12; }
 .badge-fold { background:#7f8c8d; }
+.badge-winner { 
+  background:linear-gradient(145deg, #f1c40f, #f39c12);
+  animation:badgeWinner 1.5s infinite alternate;
+}
+@keyframes badgeWinner {
+  0% { transform:scale(1); }
+  100% { transform:scale(1.1); }
+}
 .player-name {
   font-weight:bold;
   color:#3498db;
@@ -231,6 +260,31 @@ button:disabled {
   animation:pulse 2s infinite;
   border:2px solid #2ecc71;
 }
+.winning-hand-info {
+  background:rgba(241, 196, 15, 0.2);
+  padding:15px;
+  border-radius:10px;
+  margin:15px 0;
+  border:2px solid #f1c40f;
+}
+.combination-name {
+  font-size:20px;
+  color:#f1c40f;
+  font-weight:bold;
+  text-transform:uppercase;
+  margin:10px 0;
+}
+.winner-cards {
+  margin:15px 0;
+  padding:10px;
+  background:rgba(0,0,0,0.3);
+  border-radius:8px;
+}
+.winner-cards-label {
+  color:#bdc3c7;
+  font-size:14px;
+  margin-bottom:8px;
+}
 </style>
 </head>
 
@@ -266,26 +320,25 @@ const socket = io({ transports: ['websocket'] });
 let room = null;
 let myCards = [];
 let gameState = null;
+let showWinnersTimeout = null;
+let winnersShown = false;
 
 // ============= UTILITY FUNCTIONS =============
 
 function getPlayerDisplayName(player, isMe = false) {
   if (isMe) return `${player.name} 👤`;
   
-  // Если имя начинается с @ - это username
   if (player.name.startsWith('@')) return player.name;
   
-  // Если имя содержит 'Игрок_' - показываем короткий ID
   if (player.name.includes('Игрок_')) {
     const idPart = player.name.split('_')[1] || '';
     return `Игрок_${idPart.substring(0, 4)}`;
   }
   
-  // Иначе показываем первые 10 символов имени
   return player.name.length > 10 ? player.name.substring(0, 10) + '...' : player.name;
 }
 
-function renderCard(card) {
+function renderCard(card, isWinning = false) {
   if (!card) return '';
   
   const rank = card.rank;
@@ -299,7 +352,7 @@ function renderCard(card) {
   }[suit] || suit;
   
   return `
-    <div class="card ${isRed ? 'card-red' : 'card-black'}">
+    <div class="card ${isRed ? 'card-red' : 'card-black'} ${isWinning ? 'winning-card' : ''}">
       <div class="card-rank">${rank}</div>
       <div class="card-center">${suitSymbol}</div>
       <div class="card-suit">${suitSymbol}</div>
@@ -441,6 +494,9 @@ function showGame() {
   const stageName = getStageName(gameState.stage);
   const currentPlayerName = gameState.players.find(p => p.id === gameState.currentPlayerId)?.name || '...';
   
+  // Проверяем, нужно ли показывать победителей
+  const shouldShowWinners = gameState.finished && gameState.winners && gameState.winners.length > 0;
+  
   document.getElementById('app').innerHTML = `
     <div style="max-width:800px; margin:0 auto;">
       <h2 style="text-align:center; color:#f1c40f; margin-bottom:5px;">POKER TABLE</h2>
@@ -500,9 +556,10 @@ function showGame() {
           const isSB = playerIndex === gameState.sbIndex;
           const isBB = playerIndex === gameState.bbIndex;
           const isMe = p.id === me.id;
+          const isWinner = shouldShowWinners && gameState.winners.some(w => w.id === p.id);
           
           return `
-            <div class="player-row ${isCurrent ? 'current-turn' : ''} ${p.folded ? 'folded' : ''}">
+            <div class="player-row ${isCurrent ? 'current-turn' : ''} ${p.folded ? 'folded' : ''} ${isWinner ? 'winner-row' : ''}">
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
                   <span class="${isMe ? 'you-name' : 'player-name'}">
@@ -514,6 +571,7 @@ function showGame() {
                   ${p.folded ? '<span class="badge badge-fold">FOLD</span>' : ''}
                   ${p.allIn ? '<span class="badge badge-allin">ALL-IN</span>' : ''}
                   ${isMe ? '<span class="badge badge-you">ВЫ</span>' : ''}
+                  ${isWinner ? '<span class="badge badge-winner">🏆</span>' : ''}
                   ${isCurrent ? ' 🎯' : ''}
                 </div>
                 <div>
@@ -521,15 +579,26 @@ function showGame() {
                   ${p.bet > 0 ? `<span class="bet-amount" style="margin-left:10px;">+${p.bet}</span>` : ''}
                 </div>
               </div>
+              ${isWinner && p.showHand && p.showHand.length > 0 ? `
+                <div class="winner-cards">
+                  <div class="winner-cards-label">Выигрышная рука:</div>
+                  <div>
+                    ${p.showHand.map(card => renderCard(card, true)).join('')}
+                  </div>
+                </div>
+              ` : ''}
             </div>
           `;
         }).join('')}
       </div>
       
+      <!-- Информация о выигрышной комбинации -->
+      ${shouldShowWinners ? renderWinningHandInfo() : ''}
+      
       <!-- Кнопки действий -->
       ${!gameState.finished && isMyTurn ? renderActions() : ''}
       
-      ${gameState.finished ? renderWinners() : ''}
+      ${shouldShowWinners ? renderWinners() : ''}
       
       <!-- Управление -->
       <div style="text-align:center; margin-top:30px;">
@@ -569,7 +638,17 @@ function showGame() {
   if (isMyTurn) {
     updateStatus(`🎯 ВАШ ХОД! Стадия: ${stageName}`);
   } else if (gameState.finished) {
-    updateStatus(`🎉 РАЗДАЧА ЗАВЕРШЕНА!`);
+    if (shouldShowWinners && !winnersShown) {
+      updateStatus(`🏆 ШОУДАУН! Определение победителя...`);
+      // Устанавливаем таймер на 5 секунд для показа победителей
+      winnersShown = true;
+      clearTimeout(showWinnersTimeout);
+      showWinnersTimeout = setTimeout(() => {
+        updateStatus(`🏆 РАЗДАЧА ЗАВЕРШЕНА! Победитель: ${gameState.winners[0].name}`);
+      }, 5000);
+    } else {
+      updateStatus(`🏆 РАЗДАЧА ЗАВЕРШЕНА! Победитель: ${gameState.winners[0]?.name || 'Не определен'}`);
+    }
   } else {
     updateStatus(`⏳ Ходит: ${getPlayerDisplayName(gameState.players.find(p => p.id === gameState.currentPlayerId) || {name: currentPlayerName})}`);
   }
@@ -578,6 +657,20 @@ function showGame() {
   if (isMyTurn) {
     setTimeout(updateActions, 100);
   }
+}
+
+function renderWinningHandInfo() {
+  if (!gameState.winningHandName) return '';
+  
+  return `
+    <div class="winning-hand-info">
+      <h3 style="margin-top:0; color:#f1c40f; text-align:center;">🏆 ВЫИГРЫШНАЯ КОМБИНАЦИЯ</h3>
+      <div class="combination-name">${gameState.winningHandName}</div>
+      <p style="color:#bdc3c7; text-align:center; margin:10px 0;">
+        Лучшая рука за столом
+      </p>
+    </div>
+  `;
 }
 
 function renderActions() {
@@ -603,8 +696,6 @@ function updateActions() {
   const canBet = gameState.currentBet === 0 && meInGame.chips > 0;
   const canRaise = meInGame.chips > toCall && toCall < meInGame.chips;
   const isAllIn = meInGame.allIn;
-  
-  console.log('Доступные действия:', { toCall, canCheck, canCall, canBet, canRaise, isAllIn });
   
   const actionsContainer = document.getElementById('actionsContainer');
   if (!actionsContainer) return;
@@ -674,22 +765,33 @@ function renderWinners() {
   return `
     <div class="winners-container">
       <h2 style="color:#f1c40f; margin-top:0;">🏆 ПОБЕДИТЕЛИ 🏆</h2>
-      <p style="font-size:18px;">
-        <strong>Лучшая комбинация:</strong> 
-        <span style="color:#2ecc71;">${gameState.winningHandName || 'Не определено'}</span>
-      </p>
       
       <div style="margin:20px 0;">
         ${gameState.winners.map(winner => {
           const player = gameState.players.find(p => p.id === winner.id);
+          const winnerCards = player?.showHand || [];
+          
           return `
-            <div style="background:rgba(255,255,255,0.1); padding:15px; border-radius:10px; margin:10px 0;">
-              <div style="font-size:20px; color:#f1c40f; margin-bottom:5px;">
+            <div style="background:rgba(255,255,255,0.1); padding:15px; border-radius:10px; margin:15px 0;">
+              <div style="font-size:20px; color:#f1c40f; margin-bottom:10px;">
                 ${getPlayerDisplayName(player || winner, player?.id === me.id)}
+                <span style="font-size:16px; color:#2ecc71; margin-left:10px;">
+                  (Выигрыш: +${Math.floor(gameState.pot / gameState.winners.length)})
+                </span>
               </div>
+              
+              ${winnerCards.length > 0 ? `
+                <div style="margin:10px 0;">
+                  <div class="winner-cards-label">Карты победителя:</div>
+                  <div style="margin:10px 0;">
+                    ${winnerCards.map(card => renderCard(card, true)).join('')}
+                  </div>
+                </div>
+              ` : ''}
+              
               ${player?.handRank ? `
-                <div style="color:#bdc3c7;">
-                  Комбинация: <strong>${player.handRank}</strong>
+                <div style="color:#bdc3c7; margin-top:10px;">
+                  Комбинация: <strong style="color:#f1c40f;">${player.handRank}</strong>
                 </div>
               ` : ''}
             </div>
@@ -697,8 +799,8 @@ function renderWinners() {
         }).join('')}
       </div>
       
-      <p style="color:#95a5a6; font-style:italic;">
-        Нажмите "Новая раздача" для продолжения игры
+      <p style="color:#95a5a6; font-style:italic; margin-top:20px;">
+        Новая раздача начнётся через 5 секунд...
       </p>
     </div>
   `;
@@ -728,18 +830,24 @@ function leaveRoom() {
     room = null;
     gameState = null;
     myCards = [];
+    winnersShown = false;
+    clearTimeout(showWinnersTimeout);
     showLobby();
   }
 }
 
 function startGame() {
   if (!room) return;
+  winnersShown = false;
+  clearTimeout(showWinnersTimeout);
   socket.emit('start_game', { code: room.code });
   updateStatus('Запуск игры...');
 }
 
 function startNewHand() {
   if (!room) return;
+  winnersShown = false;
+  clearTimeout(showWinnersTimeout);
   socket.emit('start_game', { code: room.code });
   updateStatus('Новая раздача...');
 }
@@ -877,6 +985,8 @@ socket.on('game_started', ({ publicState }) => {
   console.log('Game started:', publicState);
   gameState = publicState;
   myCards = [];
+  winnersShown = false;
+  clearTimeout(showWinnersTimeout);
   
   setTimeout(() => {
     socket.emit('get_my_cards', {
