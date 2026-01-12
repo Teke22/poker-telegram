@@ -187,6 +187,9 @@ class GameState {
         throw new Error('Unknown command');
     }
 
+    // Проверяем, не завершилась ли игра после действия
+    this._checkForEarlyWinner();
+    
     if (!this.finished && this._bettingRoundFinished()) {
       this._nextStage();
     } else if (!this.finished) {
@@ -208,8 +211,10 @@ class GameState {
 
     if (player.chips === 0) {
       player.allIn = true;
+      player.acted = true;
+    } else {
+      player.acted = true;
     }
-    player.acted = true;
   }
 
   _handleBet(player, amount) {
@@ -305,6 +310,8 @@ class GameState {
   /* ================= FLOW ================= */
 
   _nextStage() {
+    console.log(`Переход на следующую улицу: ${this.stage} -> ${this._getNextStage()}`);
+    
     // Создаем side pots если нужно
     this._createSidePots();
 
@@ -320,29 +327,39 @@ class GameState {
     this.lastRaise = BIG_BLIND;
     this.minRaise = BIG_BLIND;
 
-    switch (this.stage) {
-      case 'preflop':
-        this.stage = 'flop';
+    const nextStage = this._getNextStage();
+    this.stage = nextStage;
+
+    switch (nextStage) {
+      case 'flop':
         for (let i = 0; i < 3; i++) {
           this.communityCards.push(this.deck.pop());
         }
         break;
-      case 'flop':
-        this.stage = 'turn';
-        this.communityCards.push(this.deck.pop());
-        break;
       case 'turn':
-        this.stage = 'river';
         this.communityCards.push(this.deck.pop());
         break;
       case 'river':
-        this.stage = 'showdown';
+        this.communityCards.push(this.deck.pop());
+        break;
+      case 'showdown':
         this.finishShowdown();
         return;
     }
 
     // Начинаем с первого активного игрока после дилера
     this.currentPlayerIndex = this._nextActivePlayer(this.dealerIndex);
+    console.log(`Новый текущий игрок: ${this.players[this.currentPlayerIndex]?.name}`);
+  }
+
+  _getNextStage() {
+    switch (this.stage) {
+      case 'preflop': return 'flop';
+      case 'flop': return 'turn';
+      case 'turn': return 'river';
+      case 'river': return 'showdown';
+      default: return 'showdown';
+    }
   }
 
   _createSidePots() {
@@ -387,6 +404,8 @@ class GameState {
   }
 
   finishShowdown() {
+    console.log('Запуск шоудауна...');
+    
     const activePlayers = this.players.filter(p => !p.folded);
 
     if (activePlayers.length === 0) {
@@ -398,18 +417,22 @@ class GameState {
     this._createSidePots();
 
     // Оцениваем руки всех активных игроков
+    console.log('Оценка комбинаций:');
     activePlayers.forEach(player => {
       player.handRank = this._evaluateHand(player);
+      console.log(`${player.name}: ${player.handRank?.name} - ${JSON.stringify(player.hand)}`);
     });
 
     // Распределяем main pot
     if (this.mainPot > 0) {
+      console.log(`Распределение основного банка: ${this.mainPot}`);
       this._distributePot(this.mainPot, activePlayers.map(p => p.id));
     }
 
     // Распределяем side pots
-    this.sidePots.forEach(sidePot => {
+    this.sidePots.forEach((sidePot, index) => {
       if (sidePot.amount > 0) {
+        console.log(`Распределение side pot ${index + 1}: ${sidePot.amount}`);
         const eligiblePlayers = activePlayers.filter(p => 
           sidePot.eligiblePlayers.includes(p.id)
         );
@@ -422,19 +445,19 @@ class GameState {
     // Определяем победителей для отображения
     if (this.winners.length > 0) {
       this.winningHandName = this.winners[0].handRank?.name || 'Win';
+      console.log(`Победитель: ${this.winners[0].name} с комбинацией ${this.winningHandName}`);
     }
 
     this.finished = true;
+    console.log('Игра завершена');
   }
 
   _evaluateHand(player) {
-    // Правильный формат для pokersolver: 'As' (туз пик), 'Kh' (король червей) и т.д.
     const allCards = [...player.hand, ...this.communityCards];
     
     const cardStrings = allCards.map(card => {
-      // Убедимся, что масть в lowercase, а ранг в правильном формате
-      const rank = card.rank; // '2','3',...,'T','J','Q','K','A'
-      const suit = card.suit.toLowerCase(); // 's','h','d','c'
+      const rank = card.rank;
+      const suit = card.suit.toLowerCase();
       return rank + suit;
     });
 
@@ -462,6 +485,7 @@ class GameState {
       if (!this.winners.some(w => w.id === eligiblePlayers[0].id)) {
         this.winners.push(eligiblePlayers[0]);
       }
+      console.log(`${eligiblePlayers[0].name} получает весь банк: ${potAmount}`);
       return;
     }
 
@@ -478,6 +502,9 @@ class GameState {
     const share = Math.floor(potAmount / winners.length);
     const remainder = potAmount % winners.length;
 
+    console.log(`Победители (${winners.length}): ${winners.map(w => w.name).join(', ')}`);
+    console.log(`Доля каждому: ${share}, остаток: ${remainder}`);
+
     winners.forEach((winner, index) => {
       const amount = share + (index < remainder ? 1 : 0);
       winner.chips += amount;
@@ -485,6 +512,7 @@ class GameState {
       if (!this.winners.some(w => w.id === winner.id)) {
         this.winners.push(winner);
       }
+      console.log(`${winner.name} получает: ${amount}`);
     });
   }
 
@@ -498,6 +526,7 @@ class GameState {
       this.winners = [winner];
       this.winningHandName = 'Fold';
       this.finished = true;
+      console.log(`Досрочный победитель: ${winner.name} получает ${totalPot}`);
       return true;
     }
     return false;
@@ -508,29 +537,47 @@ class GameState {
   _bettingRoundFinished() {
     const activePlayers = this.players.filter(p => !p.folded);
     
-    // Все активные игроки должны быть либо all-in, либо уравнять ставки
-    return activePlayers.every(p => {
-      if (p.allIn) return true;
-      return p.acted && p.bet === this.currentBet;
+    console.log(`Проверка завершения раунда торговли (${this.stage}):`);
+    console.log(`Активных игроков: ${activePlayers.length}`);
+    console.log(`Текущая ставка: ${this.currentBet}`);
+    
+    // Проверяем каждого активного игрока
+    const allDone = activePlayers.every(p => {
+      const isDone = p.allIn || (p.acted && p.bet === this.currentBet);
+      console.log(`${p.name}: allIn=${p.allIn}, acted=${p.acted}, bet=${p.bet}, currentBet=${this.currentBet}, done=${isDone}`);
+      return isDone;
     });
+    
+    console.log(`Раунд завершен: ${allDone}`);
+    return allDone;
   }
 
   _moveToNextPlayer() {
+    console.log(`Поиск следующего игрока (текущий: ${this.currentPlayerIndex})`);
+    
     const startIndex = this.currentPlayerIndex;
     let nextIndex = this._nextActivePlayer(startIndex);
     
     while (nextIndex !== startIndex) {
       const player = this.players[nextIndex];
+      console.log(`Проверка игрока ${nextIndex} (${player.name}): folded=${player.folded}, allIn=${player.allIn}, acted=${player.acted}`);
+      
       if (!player.folded && !player.allIn && !player.acted) {
         this.currentPlayerIndex = nextIndex;
+        console.log(`Новый текущий игрок: ${this.currentPlayerIndex} (${player.name})`);
         return;
       }
       nextIndex = this._nextActivePlayer(nextIndex);
     }
     
+    console.log('Не найден следующий игрок, проверяем завершение раунда');
+    
     // Если все игроки уже сделали действие, но раунд не закончился
-    // (это может произойти при all-in)
     if (this._bettingRoundFinished()) {
+      this._nextStage();
+    } else {
+      console.log('Ошибка: не найден следующий игрок, но раунд не завершен!');
+      // Аварийный переход на следующую стадию
       this._nextStage();
     }
   }
@@ -648,6 +695,21 @@ class GameState {
       }
     });
     console.log('==================\n');
+  }
+
+  debugState() {
+    console.log('\n=== GAME STATE DEBUG ===');
+    console.log('Stage:', this.stage);
+    console.log('Current bet:', this.currentBet);
+    console.log('Main pot:', this.mainPot);
+    console.log('Side pots:', this.sidePots.length);
+    console.log('Current player:', this.currentPlayerIndex, this.players[this.currentPlayerIndex]?.name);
+    console.log('Finished:', this.finished);
+    console.log('Players:');
+    this.players.forEach((p, i) => {
+      console.log(`  [${i}] ${p.name}: chips=${p.chips}, bet=${p.bet}, folded=${p.folded}, allIn=${p.allIn}, acted=${p.acted}`);
+    });
+    console.log('=======================\n');
   }
 }
 
