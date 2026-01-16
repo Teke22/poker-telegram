@@ -210,21 +210,6 @@ button:disabled {
   font-weight:bold;
   color:#3498db;
 }
-.telegram-user {
-  color: #2ecc71;
-  font-weight: bold;
-  position: relative;
-  padding-left: 25px;
-}
-.telegram-user::before {
-  content: "✈";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 16px;
-  color: #3498db;
-}
 .you-name {
   color:#2ecc71;
   font-weight:bold;
@@ -300,6 +285,126 @@ button:disabled {
   font-size:14px;
   margin-bottom:8px;
 }
+.nickname-dialog {
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.85);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  z-index:1000;
+  padding:20px;
+}
+.nickname-content {
+  background:linear-gradient(135deg, #1a5276, #154360);
+  padding:30px;
+  border-radius:20px;
+  max-width:500px;
+  width:100%;
+  box-shadow:0 20px 40px rgba(0,0,0,0.5);
+  text-align:center;
+  border:3px solid #2ecc71;
+}
+.nickname-title {
+  color:#2ecc71;
+  margin-top:0;
+  font-size:28px;
+}
+.nickname-subtitle {
+  color:#bdc3c7;
+  margin-bottom:25px;
+  font-size:16px;
+}
+.nickname-input {
+  width:100%;
+  padding:15px;
+  border-radius:10px;
+  border:2px solid #3498db;
+  font-size:18px;
+  background:rgba(255,255,255,0.1);
+  color:white;
+  margin-bottom:10px;
+  box-sizing:border-box;
+  text-align:center;
+}
+.nickname-input:focus {
+  outline:none;
+  border-color:#2ecc71;
+}
+.nickname-error {
+  color:#e74c3c;
+  min-height:24px;
+  margin:5px 0;
+  font-size:14px;
+}
+.nickname-buttons {
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  margin-top:20px;
+}
+.nickname-btn {
+  padding:15px;
+  border:none;
+  border-radius:10px;
+  font-size:16px;
+  font-weight:bold;
+  cursor:pointer;
+  transition:all 0.3s;
+}
+.nickname-btn:hover {
+  transform:translateY(-2px);
+}
+.nickname-btn-save {
+  background:linear-gradient(145deg, #27ae60, #219653);
+  color:white;
+}
+.nickname-btn-random {
+  background:linear-gradient(145deg, #3498db, #2980b9);
+  color:white;
+}
+.nickname-btn-skip {
+  background:linear-gradient(145deg, #95a5a6, #7f8c8d);
+  color:white;
+}
+.nickname-rules {
+  margin-top:20px;
+  padding-top:15px;
+  border-top:1px solid rgba(255,255,255,0.2);
+  color:#7f8c8d;
+  font-size:14px;
+}
+.current-nickname {
+  background:rgba(46, 204, 113, 0.2);
+  padding:10px;
+  border-radius:8px;
+  margin-bottom:15px;
+  border:1px dashed #2ecc71;
+}
+.current-nickname span {
+  color:#f1c40f;
+  font-weight:bold;
+}
+.allin-message {
+  background:rgba(243, 156, 18, 0.2);
+  padding:15px;
+  border-radius:10px;
+  margin:15px 0;
+  border:2px solid #f39c12;
+  text-align:center;
+}
+.allin-title {
+  color:#f39c12;
+  font-size:18px;
+  margin-top:0;
+}
+.allin-text {
+  color:#bdc3c7;
+  margin:10px 0;
+}
 </style>
 </head>
 
@@ -309,77 +414,31 @@ button:disabled {
 <div id="app"></div>
 
 <script>
-// Инициализируем Telegram Web App
-let tg = null;
-let me = null;
+const tg = window.Telegram?.WebApp;
 
-// Ждем загрузки Telegram Web App
-function initTelegram() {
-  if (window.Telegram?.WebApp) {
-    tg = window.Telegram.WebApp;
-    
-    // Расширяем приложение на весь экран
-    tg.expand();
-    
-    // Получаем данные пользователя
-    let userData = null;
-    
-    // Пробуем получить из initDataUnsafe
-    if (tg.initDataUnsafe?.user) {
-      userData = tg.initDataUnsafe.user;
-    } else {
-      // Пробуем получить из initData
-      try {
-        const initData = new URLSearchParams(tg.initData);
-        const userJson = initData.get('user');
-        if (userJson) {
-          userData = JSON.parse(userJson);
-        }
-      } catch (e) {
-        console.log('Cannot parse initData:', e);
-      }
-    }
-    
-    if (userData) {
-      // Формируем красивое имя пользователя
-      let userName = '';
-      
-      if (userData.first_name) {
-        userName = userData.first_name;
-        if (userData.last_name) {
-          userName += ' ' + userData.last_name;
-        }
-      } else if (userData.username) {
-        userName = '@' + userData.username;
-      } else {
-        userName = `Игрок_${String(userData.id).slice(-4)}`;
-      }
-      
-      me = {
-        id: String(userData.id),
-        name: userName,
-        originalUser: userData, // Сохраняем оригинальные данные
-        chips: 1000
-      };
-      
-      console.log('Telegram user loaded:', me);
-    }
-  }
-  
-  // Если Telegram не доступен или данные не получены, используем дебаг
-  if (!me) {
-    const randomId = Math.random().toString(36).substr(2, 6).toUpperCase();
-    me = {
-      id: 'debug_' + randomId,
-      name: `Игрок_${randomId}`,
-      chips: 1000
-    };
-    console.log('Debug user created:', me);
-  }
+// Инициализируем пользователя
+let me;
+if (tg && tg.initDataUnsafe?.user) {
+  const user = tg.initDataUnsafe.user;
+  me = {
+    id: String(user.id),
+    username: user.username,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    name: '', // Будет установлено после проверки ника
+    chips: 1000
+  };
+} else {
+  const randomId = Math.random().toString(36).substr(2, 6).toUpperCase();
+  me = {
+    id: 'debug_' + randomId,
+    username: null,
+    first_name: null,
+    last_name: null,
+    name: '',
+    chips: 1000
+  };
 }
-
-// Вызываем инициализацию
-initTelegram();
 
 const socket = io({ transports: ['websocket'] });
 
@@ -388,51 +447,19 @@ let myCards = [];
 let gameState = null;
 let showWinnersTimeout = null;
 let winnersShown = false;
+let hasNickname = false;
 
 // ============= UTILITY FUNCTIONS =============
 
 function getPlayerDisplayName(player, isMe = false) {
-  // Если это наш игрок и у нас есть Telegram данные
-  if (isMe && me?.originalUser) {
-    const user = me.originalUser;
-    // Пробуем получить имя в порядке приоритета
-    if (user.first_name) {
-      return `${user.first_name}${user.last_name ? ' ' + user.last_name : ''} 👤`;
-    }
-    if (user.username) {
-      return `@${user.username} 👤`;
-    }
-  }
+  if (isMe) return `${player.name} 👤`;
   
-  // Если игрок имеет оригинальные данные Telegram (пришедшие с сервера)
-  if (player.originalUser) {
-    const user = player.originalUser;
-    if (user.first_name) {
-      return `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}`;
-    }
-    if (user.username) {
-      return `@${user.username}`;
-    }
-  }
+  if (!player.name) return `Игрок...`;
   
-  // Для других игроков или если нет Telegram данных
-  // Проверяем, есть ли в имени "@" (это username)
-  if (player.name.startsWith('@')) {
-    return player.name;
-  }
+  if (player.name.startsWith('@')) return player.name;
   
-  // Если имя содержит "Игрок_", показываем укороченную версию
-  if (player.name.includes('Игрок_')) {
-    const idPart = player.name.split('_')[1] || '';
-    return `Игрок_${idPart.substring(0, 4)}`;
-  }
-  
-  // Для обычных имен обрезаем если слишком длинные
-  if (player.name.length > 10) {
-    return player.name.substring(0, 10) + '...';
-  }
-  
-  return player.name || `Игрок_${player.id.slice(-4)}`;
+  // Обрезаем длинные имена
+  return player.name.length > 15 ? player.name.substring(0, 15) + '...' : player.name;
 }
 
 function renderCard(card, isWinning = false) {
@@ -448,9 +475,17 @@ function renderCard(card, isWinning = false) {
     'c': '♣'
   }[suit] || suit;
   
+  // Форматируем ранг карты
+  let rankSymbol = rank;
+  if (rank === 'J') rankSymbol = 'В';
+  else if (rank === 'Q') rankSymbol = 'Д';
+  else if (rank === 'K') rankSymbol = 'К';
+  else if (rank === 'A') rankSymbol = 'Т';
+  else if (rank === 'T') rankSymbol = '10';
+  
   return `
     <div class="card ${isRed ? 'card-red' : 'card-black'} ${isWinning ? 'winning-card' : ''}">
-      <div class="card-rank">${rank}</div>
+      <div class="card-rank">${rankSymbol}</div>
       <div class="card-center">${suitSymbol}</div>
       <div class="card-suit">${suitSymbol}</div>
     </div>
@@ -472,36 +507,125 @@ function updateStatus(text) {
   document.getElementById('status').innerText = text;
 }
 
+// ============= NICKNAME FUNCTIONS =============
+
+function showNicknameDialog(forceShow = false) {
+  document.getElementById('app').innerHTML = `
+    <div class="nickname-dialog">
+      <div class="nickname-content">
+        <h2 class="nickname-title">🎮 ВЫБЕРИТЕ НИКНЕЙМ</h2>
+        <p class="nickname-subtitle">Ваше имя будет отображаться у всех игроков за столом</p>
+        
+        ${!forceShow && me.name ? `
+          <div class="current-nickname">
+            <p>Текущий ник: <span>${me.name}</span></p>
+            <p style="font-size:14px; color:#bdc3c7; margin-top:5px;">
+              Вы можете оставить текущий или выбрать новый
+            </p>
+          </div>
+        ` : ''}
+        
+        <div style="margin-bottom:20px;">
+          <input id="nicknameInput" class="nickname-input" 
+                 placeholder="Введите ник (3-15 символов)" 
+                 maxlength="15">
+          <div id="nicknameError" class="nickname-error"></div>
+        </div>
+        
+        <div class="nickname-buttons">
+          <button onclick="setNickname()" class="nickname-btn nickname-btn-save">
+            ✅ ${me.name ? 'СОХРАНИТЬ НОВЫЙ НИК' : 'СОХРАНИТЬ НИК'}
+          </button>
+          
+          <button onclick="generateRandomNickname()" class="nickname-btn nickname-btn-random">
+            🎲 СЛУЧАЙНЫЙ НИК
+          </button>
+          
+          ${!forceShow && me.name ? `
+            <button onclick="skipNickname()" class="nickname-btn nickname-btn-skip">
+              ⏩ ПРОДОЛЖИТЬ С ТЕКУЩИМ
+            </button>
+          ` : ''}
+          
+          ${forceShow ? `
+            <button onclick="forceSkipNickname()" class="nickname-btn nickname-btn-skip">
+              ⚡ ИСПОЛЬЗОВАТЬ ИМЯ ИЗ TELEGRAM
+            </button>
+          ` : ''}
+        </div>
+        
+        <div class="nickname-rules">
+          <p>Можно использовать буквы (русские/английские), цифры и символ _</p>
+          <p style="margin-top:5px;">Пример: Poker_King, Игрок_123, Cool_Guy</p>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Фокусируемся на поле ввода
+  setTimeout(() => {
+    const input = document.getElementById('nicknameInput');
+    if (input) {
+      input.focus();
+      if (me.name && !forceShow) {
+        input.value = me.name;
+      }
+    }
+  }, 100);
+  
+  updateStatus('Выберите никнейм для игры');
+}
+
+function setNickname() {
+  const nickname = document.getElementById('nicknameInput').value.trim();
+  const errorEl = document.getElementById('nicknameError');
+  
+  if (!nickname) {
+    errorEl.textContent = 'Введите никнейм';
+    return;
+  }
+  
+  if (nickname.length < 3) {
+    errorEl.textContent = 'Никнейм должен быть не менее 3 символов';
+    return;
+  }
+  
+  if (nickname.length > 15) {
+    errorEl.textContent = 'Никнейм должен быть не более 15 символов';
+    return;
+  }
+  
+  socket.emit('set_nickname', { nickname, user: me });
+}
+
+function generateRandomNickname() {
+  socket.emit('generate_nickname', { user: me });
+}
+
+function skipNickname() {
+  showLobby();
+}
+
+function forceSkipNickname() {
+  // Используем имя из Telegram как есть
+  me.name = getTelegramFallbackName();
+  hasNickname = false;
+  showLobby();
+}
+
+function getTelegramFallbackName() {
+  if (tg && tg.initDataUnsafe?.user) {
+    const user = tg.initDataUnsafe.user;
+    if (user.username) return `@${user.username}`;
+    if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
+    if (user.first_name) return user.first_name;
+  }
+  return `Игрок_${String(me.id).slice(-4)}`;
+}
+
 // ============= UI FUNCTIONS =============
 
 function showLobby() {
-  let userName = me.name;
-  let userInfo = '';
-  
-  // Форматируем информацию о пользователе для лобби
-  if (me.originalUser) {
-    const user = me.originalUser;
-    if (user.first_name) {
-      userName = user.first_name;
-      if (user.last_name) {
-        userName += ' ' + user.last_name;
-      }
-    } else if (user.username) {
-      userName = '@' + user.username;
-    }
-    
-    userInfo = `
-      <p><strong>Имя:</strong> <span style="color:#2ecc71;">${userName}</span></p>
-      ${user.username ? `<p><strong>Username:</strong> @${user.username}</p>` : ''}
-      <p><strong>ID:</strong> <span style="color:#bdc3c7;">${me.id.slice(0, 12)}...</span></p>
-    `;
-  } else {
-    userInfo = `
-      <p><strong>Имя:</strong> <span style="color:#bdc3c7;">${userName}</span></p>
-      <p><strong>ID:</strong> <span style="color:#bdc3c7;">${me.id}</span></p>
-    `;
-  }
-  
   document.getElementById('app').innerHTML = `
     <div style="text-align:center; padding:20px;">
       <h1 style="color:#2ecc71; margin-bottom:30px;">🎴 POKER ROYALE</h1>
@@ -509,7 +633,9 @@ function showLobby() {
       <div style="background:rgba(0,0,0,0.3); padding:20px; border-radius:15px; margin:0 auto 30px; max-width:400px;">
         <div style="margin-bottom:20px;">
           <h3>👤 Ваш профиль</h3>
-          ${userInfo}
+          <p><strong>Имя:</strong> ${me.name || 'Не установлено'}</p>
+          ${me.name ? `<p><small style="color:#bdc3c7;">Это имя видят другие игроки</small></p>` : ''}
+          <p><strong>ID:</strong> ${me.id.slice(0, 12)}...</p>
           <p><strong>Фишки:</strong> <span style="color:#f1c40f;">${me.chips}</span></p>
         </div>
         
@@ -536,10 +662,19 @@ function showLobby() {
             ВОЙТИ
           </button>
         </div>
+        
+        <div style="margin-top:30px; padding-top:20px; border-top:2px solid rgba(255,255,255,0.1);">
+          <button onclick="showNicknameDialog(true)" style="
+            background:linear-gradient(145deg, #9b59b6, #8e44ad); 
+            padding:12px 20px; 
+            font-size:14px;">
+            ✏️ ИЗМЕНИТЬ НИКНЕЙМ
+          </button>
+        </div>
       </div>
     </div>
   `;
-  updateStatus('Добро пожаловать в покер!');
+  updateStatus(`Добро пожаловать${me.name ? ', ' + me.name : ''}! Выберите действие`);
 }
 
 function showRoom() {
@@ -558,24 +693,21 @@ function showRoom() {
       
       <div style="background:rgba(0,0,0,0.3); padding:20px; border-radius:10px; margin:20px 0;">
         <h3 style="margin-top:0;">👥 Игроки в комнате (${room.players.length})</h3>
-        ${room.players.map(p => {
-          const isMe = p.id === me.id;
-          return `
-            <div class="player-row" style="${isMe ? 'background:rgba(46, 204, 113, 0.2);' : ''}">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                  <span class="${isMe ? 'telegram-user' : 'player-name'}">
-                    ${getPlayerDisplayName(p, isMe)}
-                  </span>
-                  ${isMe ? '<span class="badge badge-you">ВЫ</span>' : ''}
-                </div>
-                <div>
-                  <span class="chips-amount">💰 ${p.chips}</span>
-                </div>
+        ${room.players.map(p => `
+          <div class="player-row" style="${p.id === me.id ? 'background:rgba(46, 204, 113, 0.2);' : ''}">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <span class="${p.id === me.id ? 'you-name' : 'player-name'}">
+                  ${getPlayerDisplayName(p, p.id === me.id)}
+                </span>
+                ${p.id === me.id ? '<span class="badge badge-you">ВЫ</span>' : ''}
+              </div>
+              <div>
+                <span class="chips-amount">💰 ${p.chips}</span>
               </div>
             </div>
-          `;
-        }).join('')}
+          </div>
+        `).join('')}
       </div>
       
       <div style="text-align:center; margin-top:30px;">
@@ -603,14 +735,15 @@ function showRoom() {
       </div>
     </div>
   `;
-  updateStatus(`Вы в комнате ${room.code} | Игроков: ${room.players.length}`);
+  updateStatus(`Вы в комнате ${room.code} | Игроков: ${room.players.length} | Ваш ник: ${me.name}`);
 }
 
 function showGame() {
   if (!gameState) return;
   
-  const isMyTurn = gameState.currentPlayerId === me.id && !gameState.finished;
   const meInGame = gameState.players.find(p => p.id === me.id);
+  const isMyTurn = gameState.currentPlayerId === me.id && !gameState.finished && !meInGame?.allIn;
+  const isAllIn = meInGame?.allIn;
   
   // Обновляем наши фишки из состояния игры
   if (meInGame) {
@@ -623,10 +756,29 @@ function showGame() {
   // Проверяем, нужно ли показывать победителей
   const shouldShowWinners = gameState.finished && gameState.winners && gameState.winners.length > 0;
   
+  let actionsHTML = '';
+  if (!gameState.finished) {
+    if (isMyTurn) {
+      actionsHTML = renderActions();
+    } else if (isAllIn) {
+      actionsHTML = `
+        <div class="actions-box">
+          <h3 style="margin-top:0; color:#f39c12; text-align:center;">⚡ ВЫ НА ALL-IN</h3>
+          <div style="text-align:center; padding:20px;">
+            <p style="color:#f1c40f; font-size:18px;">Ожидайте завершения раздачи...</p>
+            <p style="color:#bdc3c7; margin-top:10px;">
+              Карты будут открыты на шоудауне
+            </p>
+          </div>
+        </div>
+      `;
+    }
+  }
+  
   document.getElementById('app').innerHTML = `
     <div style="max-width:800px; margin:0 auto;">
       <h2 style="text-align:center; color:#f1c40f; margin-bottom:5px;">POKER TABLE</h2>
-      <p style="text-align:center; color:#bdc3c7; margin-top:0;">Комната: ${room?.code || ''}</p>
+      <p style="text-align:center; color:#bdc3c7; margin-top:0;">Комната: ${room?.code || ''} | Ваш ник: ${me.name}</p>
       
       <!-- Статус и банк -->
       <div class="pot-info">
@@ -635,12 +787,20 @@ function showGame() {
           <div class="stage-indicator">${stageName}</div>
         </div>
         <div>
-          <div style="color:#95a5a6;">Банк</div>
+          <div style="color:#95a5a6;">Общий банк</div>
           <div class="pot-amount">${gameState.pot}</div>
+          ${gameState.players.some(p => p.allIn) ? 
+            `<div style="color:#f39c12; font-size:12px; margin-top:5px;">⚠️ Есть all-in</div>` : 
+            ''
+          }
         </div>
         <div>
           <div style="color:#95a5a6;">Текущая ставка</div>
           <div style="font-size:20px; color:#e74c3c;">${gameState.currentBet}</div>
+          ${gameState.minRaise > gameState.currentBet ? 
+            `<div style="color:#3498db; font-size:12px; margin-top:5px;">Мин. рейз: ${gameState.minRaise}</div>` : 
+            ''
+          }
         </div>
       </div>
       
@@ -668,6 +828,9 @@ function showGame() {
               <span style="margin-left:15px; color:#bdc3c7;">Ставка: </span>
               <span class="bet-amount">${meInGame.bet}</span>
             ` : ''}
+            ${meInGame.allIn ? `
+              <span style="margin-left:15px; color:#f39c12; font-weight:bold;">ALL-IN</span>
+            ` : ''}
           </div>
         ` : ''}
       </div>
@@ -688,7 +851,7 @@ function showGame() {
             <div class="player-row ${isCurrent ? 'current-turn' : ''} ${p.folded ? 'folded' : ''} ${isWinner ? 'winner-row' : ''}">
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                  <span class="${isMe ? 'telegram-user' : 'player-name'}">
+                  <span class="${isMe ? 'you-name' : 'player-name'}">
                     ${getPlayerDisplayName(p, isMe)}
                   </span>
                   ${isDealer ? '<span class="badge badge-dealer">D</span>' : ''}
@@ -711,6 +874,11 @@ function showGame() {
                   <div>
                     ${p.showHand.map(card => renderCard(card, true)).join('')}
                   </div>
+                  ${p.handDescription ? `
+                    <div style="margin-top:8px; color:#f1c40f; font-weight:bold;">
+                      ${p.handDescription}
+                    </div>
+                  ` : ''}
                 </div>
               ` : ''}
             </div>
@@ -721,8 +889,8 @@ function showGame() {
       <!-- Информация о выигрышной комбинации -->
       ${shouldShowWinners ? renderWinningHandInfo() : ''}
       
-      <!-- Кнопки действий -->
-      ${!gameState.finished && isMyTurn ? renderActions() : ''}
+      <!-- Кнопки действий или сообщение об all-in -->
+      ${actionsHTML}
       
       ${shouldShowWinners ? renderWinners() : ''}
       
@@ -762,11 +930,12 @@ function showGame() {
   
   // Обновляем статус
   if (isMyTurn) {
-    updateStatus(`🎯 ВАШ ХОД! Стадия: ${stageName}`);
+    updateStatus(`🎯 ВАШ ХОД! Стадия: ${stageName} | Банк: ${gameState.pot} | Нужно коллировать: ${gameState.currentBet - (meInGame?.bet || 0)}`);
+  } else if (isAllIn && !gameState.finished) {
+    updateStatus(`⚡ ВЫ НА ALL-IN | Ожидание завершения раздачи...`);
   } else if (gameState.finished) {
     if (shouldShowWinners && !winnersShown) {
       updateStatus(`🏆 ШОУДАУН! Определение победителя...`);
-      // Устанавливаем таймер на 5 секунд для показа победителей
       winnersShown = true;
       clearTimeout(showWinnersTimeout);
       showWinnersTimeout = setTimeout(() => {
@@ -776,7 +945,7 @@ function showGame() {
       updateStatus(`🏆 РАЗДАЧА ЗАВЕРШЕНА! Победитель: ${gameState.winners[0]?.name || 'Не определен'}`);
     }
   } else {
-    updateStatus(`⏳ Ходит: ${getPlayerDisplayName(gameState.players.find(p => p.id === gameState.currentPlayerId) || {name: currentPlayerName})}`);
+    updateStatus(`⏳ Ходит: ${getPlayerDisplayName(gameState.players.find(p => p.id === gameState.currentPlayerId) || {name: currentPlayerName})} | Банк: ${gameState.pot}`);
   }
   
   // Если наша очередь, обновляем действия
@@ -786,12 +955,12 @@ function showGame() {
 }
 
 function renderWinningHandInfo() {
-  if (!gameState.winningHandName) return '';
+  if (!gameState.winningHandDescription) return '';
   
   return `
     <div class="winning-hand-info">
       <h3 style="margin-top:0; color:#f1c40f; text-align:center;">🏆 ВЫИГРЫШНАЯ КОМБИНАЦИЯ</h3>
-      <div class="combination-name">${gameState.winningHandName}</div>
+      <div class="combination-name">${gameState.winningHandDescription}</div>
       <p style="color:#bdc3c7; text-align:center; margin:10px 0;">
         Лучшая рука за столом
       </p>
@@ -821,7 +990,6 @@ function updateActions() {
   const canCall = toCall > 0 && meInGame.chips >= toCall;
   const canBet = gameState.currentBet === 0 && meInGame.chips > 0;
   const canRaise = meInGame.chips > toCall && toCall < meInGame.chips;
-  const isAllIn = meInGame.allIn;
   
   const actionsContainer = document.getElementById('actionsContainer');
   if (!actionsContainer) return;
@@ -834,47 +1002,44 @@ function updateActions() {
         <p style="margin:0; font-size:16px;">
           Нужно поставить: <strong style="color:#e74c3c; font-size:18px;">${toCall}</strong> чтобы коллировать
         </p>
+        <p style="margin:5px 0 0 0; font-size:14px; color:#bdc3c7;">
+          Текущая ставка: ${gameState.currentBet}, ваша ставка: ${meInGame.bet}
+        </p>
       </div>
     `;
   }
   
   actionsHTML += `
     <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center;">
-      <!-- Фолд всегда доступен если не all-in -->
-      <button onclick="fold()" class="btn-fold" ${isAllIn ? 'disabled' : ''} style="flex:1; min-width:120px;">
+      <button onclick="fold()" class="btn-fold" style="flex:1; min-width:120px;">
         ❌ ФОЛД
       </button>
       
-      <!-- Чек доступен если не нужно коллить -->
       ${canCheck ? `
         <button onclick="check()" class="btn-check" style="flex:1; min-width:120px;">
           ✓ ЧЕК
         </button>
       ` : ''}
       
-      <!-- Колл доступен если нужно поставить -->
       ${canCall ? `
         <button onclick="call()" class="btn-call" style="flex:1; min-width:120px;">
           📞 КОЛЛ (${toCall})
         </button>
       ` : ''}
       
-      <!-- Бет доступен только если никто еще не ставил на этой улице -->
       ${canBet ? `
         <button onclick="showBetDialog('bet')" class="btn-bet" style="flex:1; min-width:120px;">
           💰 БЕТ
         </button>
       ` : ''}
       
-      <!-- Рейз доступен если у игрока есть фишки для рейза -->
       ${canRaise ? `
         <button onclick="showBetDialog('raise')" class="btn-raise" style="flex:1; min-width:120px;">
           📈 РЕЙЗ
         </button>
       ` : ''}
       
-      <!-- All-in доступен если есть фишки -->
-      ${!isAllIn && meInGame.chips > 0 ? `
+      ${meInGame.chips > 0 ? `
         <button onclick="allIn()" class="btn-allin" style="flex:1; min-width:120px;">
           ⚡ ALL-IN (${meInGame.chips})
         </button>
@@ -902,7 +1067,7 @@ function renderWinners() {
               <div style="font-size:20px; color:#f1c40f; margin-bottom:10px;">
                 ${getPlayerDisplayName(player || winner, player?.id === me.id)}
                 <span style="font-size:16px; color:#2ecc71; margin-left:10px;">
-                  (Выигрыш: +${Math.floor(gameState.pot / gameState.winners.length)})
+                  ПОБЕДИТЕЛЬ
                 </span>
               </div>
               
@@ -915,9 +1080,9 @@ function renderWinners() {
                 </div>
               ` : ''}
               
-              ${player?.handRank ? `
+              ${player?.handDescription ? `
                 <div style="color:#bdc3c7; margin-top:10px;">
-                  Комбинация: <strong style="color:#f1c40f;">${player.handRank}</strong>
+                  Комбинация: <strong style="color:#f1c40f;">${player.handDescription}</strong>
                 </div>
               ` : ''}
             </div>
@@ -935,14 +1100,7 @@ function renderWinners() {
 // ============= GAME ACTIONS =============
 
 function createRoom() {
-  // Отправляем оригинальные данные пользователя на сервер
-  const userToSend = {
-    ...me,
-    // Сохраняем оригинальные Telegram данные если они есть
-    originalUser: me.originalUser
-  };
-  
-  socket.emit('create_room', { user: userToSend });
+  socket.emit('create_room', { user: me });
   updateStatus('Создание комнаты...');
 }
 
@@ -952,15 +1110,7 @@ function joinRoom() {
     alert('Введите код комнаты');
     return;
   }
-  
-  // Отправляем оригинальные данные пользователя на сервер
-  const userToSend = {
-    ...me,
-    // Сохраняем оригинальные Telegram данные если они есть
-    originalUser: me.originalUser
-  };
-  
-  socket.emit('join_room', { code, user: userToSend });
+  socket.emit('join_room', { code, user: me });
   updateStatus('Присоединение к комнате...');
 }
 
@@ -1102,20 +1252,69 @@ function submitBet() {
 socket.on('connect', () => {
   console.log('Connected to server');
   updateStatus('✅ Подключено к серверу');
+  
+  // После подключения проверяем, есть ли у пользователя ник
+  setTimeout(() => {
+    socket.emit('check_nickname_on_enter', { user: me });
+  }, 500);
 });
 
 socket.on('disconnect', () => {
   updateStatus('❌ Соединение потеряно. Переподключение...');
 });
 
+socket.on('nickname_check_result', (data) => {
+  console.log('Nickname check result:', data);
+  
+  if (data.nickname) {
+    me.name = data.nickname;
+    hasNickname = true;
+    showLobby();
+  } else if (data.displayName) {
+    me.name = data.displayName;
+    hasNickname = false;
+    // Показываем диалог ввода ника только если нет ника и нет Telegram username
+    if (!me.username) {
+      showNicknameDialog(true);
+    } else {
+      showLobby();
+    }
+  } else {
+    // Если ничего нет, показываем диалог ввода ника
+    showNicknameDialog(true);
+  }
+});
+
+socket.on('nickname_set', (data) => {
+  if (data.success) {
+    me.name = data.nickname;
+    hasNickname = true;
+    showLobby();
+  } else {
+    document.getElementById('nicknameError').textContent = data.error;
+  }
+});
+
+socket.on('nickname_info', (data) => {
+  if (data.nickname) {
+    me.name = data.nickname;
+    hasNickname = true;
+  }
+  showLobby();
+});
+
+socket.on('nickname_generated', (data) => {
+  if (data.nickname) {
+    document.getElementById('nicknameInput').value = data.nickname;
+    document.getElementById('nicknameError').textContent = '';
+  } else if (data.error) {
+    document.getElementById('nicknameError').textContent = data.error;
+  }
+});
+
 socket.on('room_joined', (r) => {
   console.log('Room joined:', r);
   room = r;
-  // Если сервер отправляет игроков с оригинальными данными, обновляем наши данные
-  const meInRoom = r.players.find(p => p.id === me.id);
-  if (meInRoom && meInRoom.originalUser && !me.originalUser) {
-    me.originalUser = meInRoom.originalUser;
-  }
   showRoom();
 });
 
@@ -1163,8 +1362,22 @@ socket.on('error_msg', (msg) => {
   alert('❌ Ошибка: ' + msg);
 });
 
-// Инициализация
-showLobby();
+socket.on('hand_finished', (data) => {
+  console.log('Hand finished:', data);
+  if (gameState) {
+    gameState.finished = true;
+    gameState.winners = data.winners || [];
+    showGame();
+  }
+});
+
+// Инициализация - показываем загрузку до проверки ника
+document.getElementById('app').innerHTML = `
+  <div style="text-align:center; padding:50px;">
+    <h2 style="color:#2ecc71;">🎴 POKER ROYALE</h2>
+    <p style="color:#bdc3c7;">Загрузка...</p>
+  </div>
+`;
 </script>
 </body>
 </html>
